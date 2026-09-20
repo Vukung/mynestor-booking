@@ -179,6 +179,9 @@ const CFG = {
   bookingsAppId: "13d21c63-b5ec-5912-8397-c3a5ddb27a97", // Wix constant: Wix Bookings app ID (for checkout)
   businessTimeZone: "America/New_York",                  // keep equal to the site's time zone setting in Wix
   tzLabel: "Eastern Time",                               // shown to visitors next to times
+  // Where Wix sends people after checkout. Leave "" to use this page's own thank-you screen.
+  thankYouUrl: "https://www.mynestor.org/thank-you",     // e.g. "https://www.mynestor.org/thank-you"  (after they click Confirm)
+  bookingPageUrl: "https://www.mynestor.org/Nestor-Booking",  // e.g. "https://www.mynestor.org/blank-2"    (if they leave checkout without confirming)
   hideServices: ["temp"]                                  // service names (lowercase) never shown here
 };
 
@@ -432,7 +435,7 @@ const pageBase = () => location.origin + location.pathname;
 
 // Wix's docs list two paths for this endpoint; try the documented schema path, then the example path.
 async function makeRedirect(checkoutId) {
-  const body = { ecomCheckout: { checkoutId }, callbacks: { postFlowUrl: pageBase(), thankYouPageUrl: pageBase() + "?booked=1" } };
+  const body = { ecomCheckout: { checkoutId }, callbacks: { postFlowUrl: CFG.bookingPageUrl || pageBase(), thankYouPageUrl: CFG.thankYouUrl || pageBase() + "?booked=1" } };
   let r;
   try { r = await wix("/headless/v1/redirect-session", body); }
   catch (e) { if (e.status !== 404) throw e; r = await wix("/redirect-session/v1/redirect-session", body); }
