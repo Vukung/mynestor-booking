@@ -403,10 +403,22 @@ $("#bookForm").addEventListener("submit", async (e) => {
     // Confirmation step: Wix confirms the booking when its checkout completes (even for a $0 order).
     stage = "checkout";
     say(msg, "Preparing confirmation…");
-    const co = await wix("/ecom/v1/checkouts", {
+    const coBody = {
       lineItems: [{ catalogReference: { appId: CFG.bookingsAppId, catalogItemId: bookingId }, quantity: 1 }],
       channelType: "WEB"
-    });
+    };
+    let co;
+    try {
+      // Pre-fill the buyer details so the Wix checkout page doesn't ask again.
+      co = await wix("/ecom/v1/checkouts", Object.assign({}, coBody, { checkoutInfo: {
+        buyerInfo: { email: email },
+        billingInfo: { contactDetails: { firstName: first, lastName: last, phone: phone } }
+      } }));
+    } catch (e) {
+      if (e.status !== 400) throw e;
+      console.warn("Checkout rejected pre-filled details; retrying without them.", e);
+      co = await wix("/ecom/v1/checkouts", coBody); // fall back to the plain checkout that already works
+    }
     const checkout = co.checkout || {};
     if (!checkout.id) throw new Error("no checkout id returned");
     const li = (checkout.lineItems || [])[0];
