@@ -156,13 +156,14 @@ const CFG = {
   staffTypeId: "1cd44cf8-756f-41c3-bd90-3e2ffcaf1155", // Wix constant: staff resource type
   bookingsAppId: "13d21c63-b5ec-5912-8397-c3a5ddb27a97", // Wix constant: Wix Bookings app ID (for checkout)
   businessTimeZone: "America/New_York",                  // keep equal to the site's time zone setting in Wix
+  tzLabel: "Eastern Time",                               // shown to visitors next to times
   hideServices: ["temp"]                                  // service names (lowercase) never shown here
 };
 
 // ---- Helpers --------------------------------------------------------------
 const $ = (s) => document.querySelector(s);
 const steps = [...document.querySelectorAll(".step")];
-const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "your time zone";
+const TZ = CFG.tzLabel;
 const S = { nester: null, service: null, slot: null };
 let token = null, roster = null, services = null, offered = [], slots = [];
 
@@ -180,8 +181,24 @@ function fail(el, lead, err) {
 }
 const iso19 = (d) => d.toISOString().slice(0, 19);
 const asDate = (local) => new Date(local.slice(0, 19) + "Z"); // slots are requested in UTC
-const fmtTime = (local) => asDate(local).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-const fmtDay = (local) => asDate(local).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+// All times are shown in the business time zone, whatever the visitor's own zone is.
+const fmtTime = (local) => asDate(local).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: CFG.businessTimeZone });
+const fmtDay = (local) => asDate(local).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", timeZone: CFG.businessTimeZone });
+// Wall-clock time in the business zone -> the UTC "YYYY-MM-DDTHH:MM:SS" string the availability API expects.
+function bizToUtc(y, m, d, hh, mm, ss) {
+  const want = Date.UTC(y, m - 1, d, hh, mm, ss);
+  const wallOf = (ms) => {
+    const p = {};
+    new Intl.DateTimeFormat("en-US", { timeZone: CFG.businessTimeZone, hourCycle: "h23", year: "numeric", month: "2-digit",
+      day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      .formatToParts(new Date(ms)).forEach((x) => { p[x.type] = x.value; });
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  };
+  let ms = want;
+  ms -= wallOf(ms) - want;
+  ms -= wallOf(ms) - want; // second pass settles daylight-saving edges
+  return new Date(ms).toISOString().slice(0, 19);
+}
 
 // ---- Wix API (anonymous visitor token) -------------------------------------
 async function getToken() {
@@ -292,8 +309,8 @@ async function loadSlots() {
   grid.textContent = "";
   if (!S.service || !S.nester || !date) return;
   const [y, m, d] = date.split("-").map(Number);
-  const from = iso19(new Date(y, m - 1, d, 0, 0, 0));
-  const to = iso19(new Date(y, m - 1, d, 23, 59, 59));
+  const from = bizToUtc(y, m, d, 0, 0, 0);   // the chosen day in the business time zone
+  const to = bizToUtc(y, m, d, 23, 59, 59);
   say(msg, "Checking availability…");
   try {
     const r = await wix("/_api/service-availability/v2/time-slots", {
@@ -303,7 +320,7 @@ async function loadSlots() {
     slots = (r.timeSlots || []).filter((t) => t.bookable !== false)
       .sort((a, b) => a.localStartDate.localeCompare(b.localStartDate));
     if (!slots.length) return say(msg, "No openings on this day. Try another date.");
-    say(msg, "Times are shown in your time zone (" + TZ + ").");
+    say(msg, "Times are shown in " + TZ + ".");
     slots.forEach((t) => {
       const b = document.createElement("button");
       b.type = "button"; b.className = "slot"; b.setAttribute("aria-pressed", "false");
@@ -439,7 +456,7 @@ const qs = new URLSearchParams(location.search);
 if (qs.get("booked") === "1" || qs.get("orderId")) {
   showDone();
 } else {
-  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in the visitor's zone
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: CFG.businessTimeZone }); // YYYY-MM-DD, business zone
   $("#date").min = today; $("#date").value = today;
   go(1);
 }
