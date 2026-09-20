@@ -129,7 +129,7 @@ button{font:inherit;cursor:pointer}
               <p class="hint">Include the country code, for example +91 or +1.</p>
             </div>
             <button class="primary" type="submit" id="bookBtn">Book appointment</button>
-            <p class="hint">After you book, you'll be taken to a secure confirmation page to finish.</p>
+            <p class="hint"><strong>One more step:</strong> you'll be taken to a secure page. Click <strong>Confirm</strong> there to finish. Your booking is not complete until you do.</p>
           </form>
           <p class="msg" id="bookMsg" role="status" aria-live="polite"></p>
         </div>
@@ -353,6 +353,21 @@ async function makeRedirect(checkoutId) {
   return url;
 }
 
+// When this page is embedded in another site (an iframe), the Wix checkout must open in the whole browser
+// window, not inside the small frame. If the host blocks that, show a plain link as a fallback.
+function leave(url, msg) {
+  let framed = false;
+  try { framed = window.self !== window.top; } catch (_) { framed = true; }
+  if (!framed) { location.assign(url); return; }
+  try { window.top.location.href = url; } catch (_) { /* blocked; fallback link below */ }
+  setTimeout(() => {
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Continue to confirmation";
+    msg.textContent = ""; msg.className = "msg";
+    msg.append("If nothing happened, ", a, " (opens in a new tab).");
+  }, 2500);
+}
+
 $("#bookForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = $("#bookMsg"), btn = $("#bookBtn"), t = S.slot;
@@ -434,7 +449,7 @@ $("#bookForm").addEventListener("submit", async (e) => {
     } catch (_) { /* storage may be unavailable; confirmation page still works */ }
     redirecting = true;
     say(msg, "Taking you to the confirmation page…");
-    location.assign(url);
+    leave(url, msg);
   } catch (err) {
     if (stage === "checkout") {
       fail(msg, "Your time was reserved but confirmation didn't finish. Please try again or contact us.", err);
