@@ -18,7 +18,7 @@
 [hidden]{display:none!important}
 html{background:var(--mist)}
 body{margin:0;font-family:var(--sans);color:var(--ink);font-size:16px;line-height:1.5}
-.wrap{max-width:640px;margin:0 auto;padding:28px 18px 48px}
+.wrap{max-width:760px;margin:0 auto;padding:28px 18px 48px}
 h1{font-family:var(--serif);font-weight:600;font-size:34px;line-height:1.1;margin:0 0 8px;color:var(--pine)}
 .lede{margin:0 0 26px;color:var(--muted);max-width:52ch}
 h2{font-family:var(--serif);font-weight:600;font-size:22px;line-height:1.2;margin:2px 0 10px;color:var(--pine)}
@@ -60,6 +60,22 @@ button{font:inherit;cursor:pointer}
 .done-box dt{color:var(--muted)}
 .done-box dd{margin:0;font-weight:500}
 .ghost{height:44px;padding:0 18px;background:#fff;border:1.5px solid var(--pine);border-radius:8px;color:var(--pine);font-weight:600}
+
+.svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.svc{display:flex;flex-direction:column;align-items:stretch;text-align:left;padding:0;background:#fff;border:1.5px solid var(--sage);border-radius:12px;color:var(--ink);overflow:hidden}
+.svc:hover{border-color:var(--moss)}
+.svc[aria-pressed="true"]{border-color:var(--pine);box-shadow:0 0 0 2px var(--pine);background:var(--tint)}
+.svc-img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:var(--tint)}
+.svc-body{display:flex;flex-direction:column;gap:6px;padding:14px 16px 16px;flex:1}
+.svc-name{font-family:var(--serif);font-weight:600;font-size:21px;line-height:1.15;color:var(--pine)}
+.svc-desc{font-size:14px;color:var(--muted);flex:1}
+.svc-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;flex-wrap:wrap}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--tint);color:var(--pine);font-size:13px;font-weight:600}
+.svc[aria-pressed="true"] .chip{background:#fff}
+.svc-price{font-weight:600;color:var(--pine)}
+.svc-cta{display:block;margin-top:10px;padding:9px 0;text-align:center;border-radius:8px;background:var(--pine);color:#fff;font-weight:600;font-size:15px}
+.svc:hover .svc-cta{background:var(--moss)}
+.svc[aria-pressed="true"] .svc-cta{background:var(--amber);color:var(--pine)}
 @media (max-width:480px){.two{grid-template-columns:1fr}.row{flex-direction:column}h1{font-size:29px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
@@ -67,11 +83,20 @@ button{font:inherit;cursor:pointer}
 <body>
 <main class="wrap">
   <h1>Book a Nester</h1>
-  <p class="lede">Enter your postal code to see the Nesters who serve your area, then pick a time that suits you.</p>
+  <p class="lede">Choose a service, tell us your area, then pick a Nester and a time that suits you.</p>
 
   <ol class="steps" id="steps">
     <li class="step current" id="step1">
       <div class="marker" aria-hidden="true">1</div>
+      <div>
+        <h2>Choose a service</h2>
+        <div class="svc-grid" id="services" role="group" aria-label="Services"></div>
+        <p class="msg" id="svcMsg" role="status" aria-live="polite"></p>
+      </div>
+    </li>
+
+    <li class="step" id="step2" hidden>
+      <div class="marker" aria-hidden="true">2</div>
       <div>
         <h2>Your area</h2>
         <div class="panel">
@@ -87,32 +112,29 @@ button{font:inherit;cursor:pointer}
       </div>
     </li>
 
-    <li class="step" id="step2" hidden>
-      <div class="marker" aria-hidden="true">2</div>
+    <li class="step" id="step3" hidden>
+      <div class="marker" aria-hidden="true">3</div>
       <div>
         <h2>Choose your Nester</h2>
         <div class="panel"><div class="cards" id="nesters"></div></div>
       </div>
     </li>
 
-    <li class="step" id="step3" hidden>
-      <div class="marker" aria-hidden="true">3</div>
+    <li class="step" id="step4" hidden>
+      <div class="marker" aria-hidden="true">4</div>
       <div>
-        <h2>Pick a service and time</h2>
+        <h2>Pick a date and time</h2>
         <div class="panel">
-          <div class="two">
-            <div class="field"><label for="service">Service</label><select id="service"></select></div>
-            <div class="field"><label for="date">Date</label><input type="date" id="date"></div>
-          </div>
-          <p class="msg" id="svcMsg" role="status" aria-live="polite"></p>
+          <p class="summary" id="timeFor"></p>
+          <div class="field"><label for="date">Date</label><input type="date" id="date"></div>
           <div class="slots" id="slots" role="group" aria-label="Available times"></div>
           <p class="msg" id="slotMsg" role="status" aria-live="polite"></p>
         </div>
       </div>
     </li>
 
-    <li class="step" id="step4" hidden>
-      <div class="marker" aria-hidden="true">4</div>
+    <li class="step" id="step5" hidden>
+      <div class="marker" aria-hidden="true">5</div>
       <div>
         <h2>Your details</h2>
         <div class="panel">
@@ -164,15 +186,17 @@ const CFG = {
 const $ = (s) => document.querySelector(s);
 const steps = [...document.querySelectorAll(".step")];
 const TZ = CFG.tzLabel;
-const S = { nester: null, service: null, slot: null };
-let token = null, roster = null, services = null, offered = [], slots = [];
+const S = { pin: null, nester: null, service: null, slot: null };
+let token = null, roster = null, services = null, catalog = [], slots = [];
 
+const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function go(n) {
   steps.forEach((li, i) => {
     li.hidden = i + 1 > n;
     li.classList.toggle("done", i + 1 < n);
     li.classList.toggle("current", i + 1 === n);
   });
+  if (n > 1) steps[n - 1].scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "nearest" });
 }
 function say(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
 function fail(el, lead, err) {
@@ -248,21 +272,98 @@ async function loadServices() {
   return services;
 }
 
-// ---- Step 1: PIN -> Nesters --------------------------------------------------
-$("#pinForm").addEventListener("submit", async (e) => {
+// ---- Service display helpers -------------------------------------------------
+function fmtDuration(min) {
+  if (!min) return "";
+  const h = Math.floor(min / 60), m = min % 60;
+  return (h ? h + " hr" : "") + (h && m ? " " : "") + (m ? m + " min" : "");
+}
+function durationOf(s) {
+  const d = s.schedule && s.schedule.availabilityConstraints && s.schedule.availabilityConstraints.durations;
+  return d && d[0] && d[0].minutes;
+}
+function priceText(s) {
+  const p = s.payment || {}, t = p.rateType;
+  const money = (m) => m ? (m.formattedValue || m.formattedAmount || (m.value ? (m.currency ? m.currency + " " : "") + m.value : "")) : "";
+  if (t === "NO_FEE") return "Free";
+  if (t === "CUSTOM") return (p.custom && p.custom.description) || "";
+  if (t === "FIXED") return money(p.fixed && p.fixed.price);
+  if (t === "VARIED") { const v = p.varied || {}; return v.minPrice ? "From " + money(v.minPrice) : money(v.defaultPrice); }
+  return "";
+}
+function imageOf(s) {
+  const img = s.media && s.media.mainMedia && s.media.mainMedia.image;
+  const raw = typeof img === "string" ? img : img && (img.url || img.id);
+  if (!raw) return "";
+  if (/^https?:\/\//.test(raw)) return raw;
+  const m = /^wix:image:\/\/v1\/([^/#]+)/.exec(raw);
+  return m ? "https://static.wixstatic.com/media/" + m[1] : "";
+}
+
+// ---- Step 1: choose a service -------------------------------------------------
+function renderServices(list) {
+  const box = $("#services"); box.textContent = "";
+  list.forEach((sv) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "svc"; b.setAttribute("aria-pressed", "false");
+    const src = imageOf(sv);
+    if (src) {
+      const im = document.createElement("img");
+      im.className = "svc-img"; im.alt = ""; im.loading = "lazy"; im.src = src;
+      im.addEventListener("error", () => im.remove());
+      b.append(im);
+    }
+    const body = document.createElement("span"); body.className = "svc-body";
+    const name = document.createElement("span"); name.className = "svc-name"; name.textContent = sv.name;
+    body.append(name);
+    if (sv.tagLine) { const d = document.createElement("span"); d.className = "svc-desc"; d.textContent = sv.tagLine; body.append(d); }
+    const meta = document.createElement("span"); meta.className = "svc-meta";
+    const dur = fmtDuration(durationOf(sv));
+    if (dur) { const c = document.createElement("span"); c.className = "chip"; c.textContent = dur; meta.append(c); }
+    const price = priceText(sv);
+    if (price) { const p = document.createElement("span"); p.className = "svc-price"; p.textContent = price; meta.append(p); }
+    if (meta.childNodes.length) body.append(meta);
+    const cta = document.createElement("span"); cta.className = "svc-cta"; cta.textContent = "Select";
+    body.append(cta);
+    b.append(body);
+    b.addEventListener("click", () => pickService(sv, b));
+    box.append(b);
+  });
+}
+
+function pickService(sv, btn) {
+  document.querySelectorAll("#services .svc").forEach((x) => {
+    const on = x === btn;
+    x.setAttribute("aria-pressed", String(on));
+    x.querySelector(".svc-cta").textContent = on ? "Selected" : "Select";
+  });
+  S.service = sv; S.nester = null; S.slot = null;
+  $("#slots").textContent = ""; say($("#slotMsg"), "");
+  if (S.pin) showNesters(); else { say($("#pinMsg"), "Showing Nesters who offer " + sv.name + "."); go(2); }
+}
+
+// ---- Step 2: PIN -> Nesters --------------------------------------------------
+$("#pinForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const pin = $("#pin").value.replace(/\s+/g, "");
   const msg = $("#pinMsg");
+  if (!S.service) return say(msg, "Choose a service first.", "error");
   if (!/^[A-Za-z0-9-]{4,10}$/.test(pin)) return say(msg, "Enter a valid postal or PIN code.", "error");
-  const btn = $("#pinBtn"); btn.disabled = true; say(msg, "Looking up Nesters…");
-  try {
-    const list = (await loadRoster()).filter((n) => n.pins.includes(pin));
-    if (!list.length) { go(1); return say(msg, "No Nesters serve " + pin + " yet. Check the code or try a nearby one.", "error"); }
-    say(msg, list.length + (list.length === 1 ? " Nester serves " : " Nesters serve ") + pin + ".");
-    renderNesters(list); S.nester = null; go(2);
-  } catch (err) { fail(msg, "Couldn't load Nesters. Please try again.", err); }
-  finally { btn.disabled = false; }
+  S.pin = pin;
+  showNesters();
 });
+
+// Nesters who serve the PIN and offer the chosen service.
+function showNesters() {
+  const sv = S.service, pin = S.pin, msg = $("#pinMsg");
+  S.nester = null; S.slot = null; $("#slots").textContent = ""; say($("#slotMsg"), "");
+  const inArea = roster.filter((n) => n.pins.includes(pin));
+  if (!inArea.length) { go(2); return say(msg, "No Nesters serve " + pin + " yet. Check the code or try a nearby one.", "error"); }
+  const list = inArea.filter((n) => (sv.staffMemberIds || []).includes(n.resourceId));
+  if (!list.length) { go(2); return say(msg, "No Nesters in " + pin + " offer " + sv.name + " right now. Try another service or code.", "error"); }
+  say(msg, list.length + (list.length === 1 ? " Nester offers " : " Nesters offer ") + sv.name + " in " + pin + ".");
+  renderNesters(list); go(3);
+}
 
 function renderNesters(list) {
   const box = $("#nesters"); box.textContent = "";
@@ -277,34 +378,21 @@ function renderNesters(list) {
   });
 }
 
-// ---- Step 2: Nester -> services ----------------------------------------------
-async function pickNester(n, btn) {
+// ---- Step 3: Nester -> date and time ------------------------------------------
+function pickNester(n, btn) {
   document.querySelectorAll("#nesters .card").forEach((x) => x.setAttribute("aria-pressed", String(x === btn)));
-  S.nester = n; S.slot = null; go(3);
-  const msg = $("#svcMsg"), sel = $("#service");
-  sel.textContent = ""; $("#slots").textContent = ""; say($("#slotMsg"), "");
-  say(msg, "Loading services…");
-  try {
-    offered = (await loadServices()).filter((s) => (s.staffMemberIds || []).includes(n.resourceId));
-    if (!offered.length) return say(msg, n.name + " has no bookable services right now.", "error");
-    offered.forEach((s) => {
-      const o = document.createElement("option"); o.value = s.id;
-      const m = s.schedule && s.schedule.availabilityConstraints && s.schedule.availabilityConstraints.durations &&
-                s.schedule.availabilityConstraints.durations[0] && s.schedule.availabilityConstraints.durations[0].minutes;
-      o.textContent = s.name + (m ? " (" + m + " min)" : "");
-      sel.append(o);
-    });
-    S.service = offered[0]; say(msg, "");
-    loadSlots();
-  } catch (err) { fail(msg, "Couldn't load services. Please try again.", err); }
+  S.nester = n; S.slot = null;
+  $("#timeFor").textContent = S.service.name + " with " + n.name;
+  $("#slots").textContent = ""; say($("#slotMsg"), "");
+  go(4);
+  loadSlots();
 }
-$("#service").addEventListener("change", (e) => { S.service = offered.find((s) => s.id === e.target.value) || null; loadSlots(); });
 $("#date").addEventListener("change", loadSlots);
 
-// ---- Step 3: slots -----------------------------------------------------------
+// ---- Step 4: slots -----------------------------------------------------------
 async function loadSlots() {
   S.slot = null;
-  if (!steps[3].hidden) go(3);
+  if (!steps[4].hidden) go(4);
   const grid = $("#slots"), msg = $("#slotMsg"), date = $("#date").value;
   grid.textContent = "";
   if (!S.service || !S.nester || !date) return;
@@ -336,10 +424,10 @@ function pickSlot(t, btn) {
   S.slot = t;
   $("#summary").textContent = S.service.name + " with " + S.nester.name + ", " + fmtDay(t.localStartDate) + " at " + fmtTime(t.localStartDate);
   say($("#bookMsg"), "");
-  go(4);
+  go(5);
 }
 
-// ---- Step 4: book -> checkout -> redirect ---------------------------------------
+// ---- Step 5: book -> checkout -> redirect ---------------------------------------
 const pageBase = () => location.origin + location.pathname;
 
 // Wix's docs list two paths for this endpoint; try the documented schema path, then the example path.
@@ -486,6 +574,18 @@ if (qs.get("booked") === "1" || qs.get("orderId")) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: CFG.businessTimeZone }); // YYYY-MM-DD, business zone
   $("#date").min = today; $("#date").value = today;
   go(1);
+  (async () => {
+    const msg = $("#svcMsg");
+    say(msg, "Loading services…");
+    try {
+      const [r, sv] = await Promise.all([loadRoster(), loadServices()]);
+      const ids = new Set(r.map((n) => n.resourceId));
+      catalog = sv.filter((x) => (x.staffMemberIds || []).some((id) => ids.has(id))); // skip services nobody can deliver
+      if (!catalog.length) return say(msg, "No services are open for booking right now.", "error");
+      say(msg, "");
+      renderServices(catalog);
+    } catch (err) { fail(msg, "Couldn't load services. Please refresh and try again.", err); }
+  })();
 }
 })();
 </script>
