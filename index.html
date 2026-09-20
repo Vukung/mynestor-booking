@@ -129,6 +129,7 @@ button{font:inherit;cursor:pointer}
               <p class="hint">Include the country code, for example +91 or +1.</p>
             </div>
             <button class="primary" type="submit" id="bookBtn">Book appointment</button>
+            <p class="hint">After you book, you'll be taken to a secure confirmation page to finish.</p>
           </form>
           <p class="msg" id="bookMsg" role="status" aria-live="polite"></p>
         </div>
@@ -153,6 +154,7 @@ const CFG = {
   api: "https://www.wixapis.com",
   collection: "nestors-data",
   staffTypeId: "1cd44cf8-756f-41c3-bd90-3e2ffcaf1155", // Wix constant: staff resource type
+  bookingsAppId: "13d21c63-b5ec-5912-8397-c3a5ddb27a97", // Wix constant: Wix Bookings app ID (for checkout)
   businessTimeZone: "America/New_York",                  // keep equal to the site's time zone setting in Wix
   hideServices: ["temp"]                                  // service names (lowercase) never shown here
 };
@@ -203,7 +205,10 @@ async function wix(path, body) {
   if (r.status === 401) { token = null; r = await send(); }
   const text = await r.text();
   let data; try { data = JSON.parse(text); } catch { data = { message: text }; }
-  if (!r.ok) throw new Error(String(data.message || data.error || text).slice(0, 240) + " [" + r.status + "]");
+  if (!r.ok) {
+    const e = new Error(String(data.message || data.error || text).slice(0, 240) + " [" + r.status + "]");
+    e.status = r.status; throw e;
+  }
   return data;
 }
 
@@ -221,7 +226,7 @@ async function loadServices() {
   const d = await wix("/bookings/v2/services/query", { query: { filter: { hidden: false }, paging: { limit: 100 } } });
   services = (d.services || []).filter((s) =>
     s.type === "APPOINTMENT" && s.onlineBooking && s.onlineBooking.enabled &&
-    !(s.payment && s.payment.options && s.payment.options.online) &&          // this page has no checkout
+    !(s.payment && s.payment.options && s.payment.options.online) &&          // only pay-in-person / free services
     !CFG.hideServices.includes((s.name || "").trim().toLowerCase()));
   return services;
 }
@@ -317,7 +322,20 @@ function pickSlot(t, btn) {
   go(4);
 }
 
-// ---- Step 4: book ------------------------------------------------------------
+// ---- Step 4: book -> checkout -> redirect ---------------------------------------
+const pageBase = () => location.origin + location.pathname;
+
+// Wix's docs list two paths for this endpoint; try the documented schema path, then the example path.
+async function makeRedirect(checkoutId) {
+  const body = { ecomCheckout: { checkoutId }, callbacks: { postFlowUrl: pageBase(), thankYouPageUrl: pageBase() + "?booked=1" } };
+  let r;
+  try { r = await wix("/headless/v1/redirect-session", body); }
+  catch (e) { if (e.status !== 404) throw e; r = await wix("/redirect-session/v1/redirect-session", body); }
+  const url = r.redirectSession && (r.redirectSession.fullUrl || r.redirectSession.shortUrl);
+  if (!url) throw new Error("no checkout link returned");
+  return url;
+}
+
 $("#bookForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = $("#bookMsg"), btn = $("#bookBtn"), t = S.slot;
@@ -329,6 +347,7 @@ $("#bookForm").addEventListener("submit", async (e) => {
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return say(msg, "Enter your phone with country code, like +919876543210.", "error");
 
   btn.disabled = true; say(msg, "Confirming your time…");
+  let redirecting = false, stage = "book";
   try {
     const rid = S.nester.resourceId;
     const loc = t.location || {};
@@ -342,7 +361,8 @@ $("#bookForm").addEventListener("submit", async (e) => {
       say(msg, "That time was just taken. Please pick another.", "error");
       return loadSlots();
     }
-    say(msg, "Booking…");
+
+    say(msg, "Reserving your time…");
     const res = await wix("/bookings/v2/bookings", {
       booking: {
         bookedEntity: { slot: {
@@ -360,19 +380,49 @@ $("#bookForm").addEventListener("submit", async (e) => {
       formSubmission: { first_name: first, last_name: last, email: email, phone: phone },
       participantNotification: { notifyParticipants: true }
     });
-    showDone(res.booking || {}, email);
-  } catch (err) { fail(msg, "Couldn't complete the booking. Please try again.", err); }
-  finally { btn.disabled = false; }
+    const bookingId = res.booking && res.booking.id;
+    if (!bookingId) throw new Error("booking created but no booking id returned");
+
+    // Confirmation step: Wix confirms the booking when its checkout completes (even for a $0 order).
+    stage = "checkout";
+    say(msg, "Preparing confirmation…");
+    const co = await wix("/ecom/v1/checkouts", {
+      lineItems: [{ catalogReference: { appId: CFG.bookingsAppId, catalogItemId: bookingId }, quantity: 1 }],
+      channelType: "WEB"
+    });
+    const checkout = co.checkout || {};
+    if (!checkout.id) throw new Error("no checkout id returned");
+    const li = (checkout.lineItems || [])[0];
+    const avail = li && li.availability && li.availability.status;
+    if (avail && avail !== "AVAILABLE") throw new Error("checkout reports the time as " + avail);
+    const url = await makeRedirect(checkout.id);
+
+    try {
+      sessionStorage.setItem("nb_last", JSON.stringify({
+        service: S.service.name, nester: S.nester.name,
+        date: fmtDay(t.localStartDate), time: fmtTime(t.localStartDate) + " (" + TZ + ")", email: email
+      }));
+    } catch (_) { /* storage may be unavailable; confirmation page still works */ }
+    redirecting = true;
+    say(msg, "Taking you to the confirmation page…");
+    location.assign(url);
+  } catch (err) {
+    if (stage === "checkout") {
+      fail(msg, "Your time was reserved but confirmation didn't finish. Please try again or contact us.", err);
+    } else {
+      fail(msg, "Couldn't complete the booking. Please try again.", err);
+    }
+  } finally { if (!redirecting) btn.disabled = false; }
 });
 
-function showDone(b, email) {
-  const t = S.slot;
-  const status = b.status === "CONFIRMED" ? "Confirmed" : "Submitted, awaiting confirmation";
-  const rows = [
-    ["Service", S.service.name], ["Nester", S.nester.name],
-    ["Date", fmtDay(t.localStartDate)], ["Time", fmtTime(t.localStartDate) + " (" + TZ + ")"],
-    ["Status", status], ["Contact", email]
-  ];
+// ---- Return from Wix checkout ---------------------------------------------------
+function showDone() {
+  let d = null;
+  try { d = JSON.parse(sessionStorage.getItem("nb_last") || "null"); } catch (_) {}
+  $("#doneTitle").textContent = "Thank you, your booking is in";
+  const rows = d
+    ? [["Service", d.service], ["Nester", d.nester], ["Date", d.date], ["Time", d.time], ["Contact", d.email]]
+    : [["Status", "Your booking was received. Check your email for the details."]];
   const dl = $("#doneList"); dl.textContent = "";
   rows.forEach(([k, v]) => {
     const dt = document.createElement("dt"); dt.textContent = k;
@@ -382,12 +432,17 @@ function showDone(b, email) {
   $("#steps").hidden = true; $("#done").hidden = false;
   window.scrollTo({ top: 0 });
 }
-$("#again").addEventListener("click", () => location.reload());
+$("#again").addEventListener("click", () => { location.href = pageBase(); });
 
 // ---- Init ----------------------------------------------------------------------
-const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in the visitor's zone
-$("#date").min = today; $("#date").value = today;
-go(1);
+const qs = new URLSearchParams(location.search);
+if (qs.get("booked") === "1" || qs.get("orderId")) {
+  showDone();
+} else {
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in the visitor's zone
+  $("#date").min = today; $("#date").value = today;
+  go(1);
+}
 })();
 </script>
 </body>
