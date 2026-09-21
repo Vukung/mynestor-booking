@@ -189,7 +189,7 @@ const CFG = {
 const $ = (s) => document.querySelector(s);
 const steps = [...document.querySelectorAll(".step")];
 const TZ = CFG.tzLabel;
-const S = { pin: null, nester: null, service: null, slot: null };
+const S = { pin: null, nester: null, service: null, slot: null, nesterCount: 0 };
 let token = null, roster = null, services = null, catalog = [], slots = [];
 
 const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -361,9 +361,10 @@ function showNesters() {
   const sv = S.service, pin = S.pin, msg = $("#pinMsg");
   S.nester = null; S.slot = null; $("#slots").textContent = ""; say($("#slotMsg"), "");
   const inArea = roster.filter((n) => n.pins.includes(pin));
-  if (!inArea.length) { go(2); return say(msg, "No Nesters serve " + pin + " yet. Check the code or try a nearby one.", "error"); }
+  if (!inArea.length) { go(2); return say(msg, "We're actively growing and will be available in your area soon. Please check back with us, or try a nearby postal code."); }
   const list = inArea.filter((n) => (sv.staffMemberIds || []).includes(n.resourceId));
   if (!list.length) { go(2); return say(msg, "No Nesters in " + pin + " offer " + sv.name + " right now. Try another service or code.", "error"); }
+  S.nesterCount = list.length;
   say(msg, list.length + (list.length === 1 ? " Nester offers " : " Nesters offer ") + sv.name + " in " + pin + ".");
   renderNesters(list); go(3);
 }
@@ -410,7 +411,7 @@ async function loadSlots() {
     });
     slots = (r.timeSlots || []).filter((t) => t.bookable !== false)
       .sort((a, b) => a.localStartDate.localeCompare(b.localStartDate));
-    if (!slots.length) return say(msg, "No openings on this day. Try another date.");
+    if (!slots.length) return say(msg, "No openings on this day. Try another date" + (S.nesterCount > 1 ? ", or choose another Nester above." : "."));
     say(msg, "Times are shown in " + TZ + ".");
     slots.forEach((t) => {
       const b = document.createElement("button");
