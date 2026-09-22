@@ -76,6 +76,35 @@ button{font:inherit;cursor:pointer}
 .svc-cta{display:block;margin-top:10px;padding:9px 0;text-align:center;border-radius:8px;background:var(--pine);color:#fff;font-weight:600;font-size:15px}
 .svc:hover .svc-cta{background:var(--moss)}
 .svc[aria-pressed="true"] .svc-cta{background:var(--amber);color:var(--pine)}
+
+.svc-cta-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.svc-cta{flex:1;margin-top:0}
+.svc-info{flex:0 0 auto;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--sage);background:#fff;color:var(--moss);font-family:var(--serif);font-weight:600;font-size:15px;line-height:1;display:grid;place-items:center}
+.svc-info:hover{border-color:var(--moss);color:var(--pine)}
+.modal-overlay{position:fixed;inset:0;background:rgba(20,48,46,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50;padding:0}
+.modal-box{background:#fff;border-radius:16px 16px 0 0;max-width:520px;width:100%;max-height:80vh;overflow-y:auto;padding:22px 22px 28px}
+.modal-close{float:right;border:0;background:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer;padding:4px 6px}
+.modal-box h3{font-family:var(--serif);font-weight:600;font-size:23px;color:var(--pine);margin:0 0 4px}
+.modal-tag{color:var(--muted);font-size:14px;margin:0 0 14px}
+.modal-box ul{margin:0;padding-left:20px}
+.modal-box li{margin-bottom:7px;line-height:1.4}
+@media (min-width:640px){
+  .modal-overlay{align-items:center;padding:20px}
+  .modal-box{border-radius:16px;max-height:85vh}
+}
+@media (max-width:480px){
+  .svc-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .svc-img{display:none}
+  .svc-body{padding:10px 10px 12px;gap:4px}
+  .svc-name{font-size:15px;line-height:1.2}
+  .svc-desc{display:none}
+  .svc-meta{margin-top:2px}
+  .chip{font-size:11px;padding:1px 7px}
+  .svc-price{font-size:13px}
+  .svc-cta-row{margin-top:6px;gap:5px}
+  .svc-cta{padding:6px 0;font-size:12px;border-radius:6px}
+  .svc-info{width:26px;height:26px;font-size:13px}
+}
 @media (max-width:480px){.two{grid-template-columns:1fr}.row{flex-direction:column}h1{font-size:29px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
@@ -159,6 +188,15 @@ button{font:inherit;cursor:pointer}
     </li>
   </ol>
 
+  <div class="modal-overlay" id="infoOverlay" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <button type="button" class="modal-close" id="infoClose" aria-label="Close">&times;</button>
+      <h3 id="infoTitle"></h3>
+      <p class="modal-tag" id="infoTag"></p>
+      <ul id="infoList"></ul>
+    </div>
+  </div>
+
   <section class="done-box" id="done" hidden aria-live="polite">
     <h2 id="doneTitle">Booking submitted</h2>
     <dl id="doneList"></dl>
@@ -182,7 +220,47 @@ const CFG = {
   // Where Wix sends people after checkout. Leave "" to use this page's own thank-you screen.
   thankYouUrl: "https://www.mynestor.org/thank-you",     // e.g. "https://www.mynestor.org/thank-you"  (after they click Confirm)
   bookingPageUrl: "https://www.mynestor.org/Nestor-Booking",  // e.g. "https://www.mynestor.org/blank-2"    (if they leave checkout without confirming)
-  hideServices: ["temp"]                                  // service names (lowercase) never shown here
+  hideServices: ["temp"],                                 // service names (lowercase) never shown here
+  // Brief "what's included" per service, matched by service name (case-insensitive, trimmed).
+  // Edit this list any time; no other change is needed for it to show up in the info popup.
+  serviceInfo: {
+    "nestor™ connect": [
+      "Find local plumbers, HVAC companies, electricians, handymen, landscapers, cleaners, movers, organizers, technology specialists and pest-control companies",
+      "Make calls at the client's direction",
+      "Schedule and confirm appointments",
+      "Prepare information for contractor visits",
+      "Organize estimates and proposals",
+      "Track project status"
+    ],
+    "nestor™ admin": [
+      "Mail: sort incoming mail, separate action items, identify junk mail",
+      "Subscriptions: inventory, recurring charges, cancellations, renewal dates",
+      "Household administration: renewal calendar, warranty dates, contact list, document index",
+      "Records: tax, insurance, property, vehicle, warranty and membership documents",
+      "Recurring expenses: a simple monthly \u201cwhat comes out every month\u201d list"
+    ],
+    "nestor™ digital": [
+      "Computer organization: desktop cleanup, file/folder organization, duplicate cleanup",
+      "Documents: scanning, digitizing, searchable folders, backup organization",
+      "Technology: printer/Wi-Fi setup, updates, device setup, basic troubleshooting",
+      "Digital photos: organizing, albums, duplicate identification, backups",
+      "Digital safety: two-factor authentication, basic security review, spotting suspicious messages"
+    ],
+    "nestor™ home": [
+      "Home records: property, insurance, appliance, warranty, HVAC and utility information",
+      "Home safety: smoke/CO detector checks, emergency contact sheet, preparedness checklist",
+      "Home organization: basement, garage, closets, storage, household inventory",
+      "Seasonal: spring/winter checklists, vacation prep, storm preparation"
+    ],
+    "nestor™ business": [
+      "Business organization: files, folders, vendor/customer/warranty records",
+      "Administrative support: mail, invoices, renewals, calendars, contacts",
+      "Subscriptions & vendor management: inventory, unused services, renewal dates",
+      "Technology & digital support: computers, cloud storage, software, practical AI adoption",
+      "Office organization: files, supplies, storage, workspace systems",
+      "Business Connect: contractor/vendor sourcing, coordinating appointments, tracking proposals"
+    ]
+  }
 };
 
 // ---- Helpers --------------------------------------------------------------
@@ -294,6 +372,24 @@ function priceText(s) {
   if (t === "VARIED") { const v = p.varied || {}; return v.minPrice ? "From " + money(v.minPrice) : money(v.defaultPrice); }
   return "";
 }
+function infoOf(s) {
+  const key = (s.name || "").trim().toLowerCase();
+  return CFG.serviceInfo[key] || null;
+}
+function showInfo(sv) {
+  const items = infoOf(sv); if (!items) return;
+  $("#infoTitle").textContent = sv.name;
+  $("#infoTag").textContent = sv.tagLine || "";
+  $("#infoTag").hidden = !sv.tagLine;
+  const ul = $("#infoList"); ul.textContent = "";
+  items.forEach((t) => { const li = document.createElement("li"); li.textContent = t; ul.append(li); });
+  $("#infoOverlay").hidden = false;
+}
+function hideInfo() { $("#infoOverlay").hidden = true; }
+$("#infoClose").addEventListener("click", hideInfo);
+$("#infoOverlay").addEventListener("click", (e) => { if (e.target.id === "infoOverlay") hideInfo(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideInfo(); });
+
 function imageOf(s) {
   const img = s.media && s.media.mainMedia && s.media.mainMedia.image;
   const raw = typeof img === "string" ? img : img && (img.url || img.id);
@@ -326,8 +422,17 @@ function renderServices(list) {
     const price = priceText(sv);
     if (price) { const p = document.createElement("span"); p.className = "svc-price"; p.textContent = price; meta.append(p); }
     if (meta.childNodes.length) body.append(meta);
+    const ctaRow = document.createElement("span"); ctaRow.className = "svc-cta-row";
     const cta = document.createElement("span"); cta.className = "svc-cta"; cta.textContent = "Select";
-    body.append(cta);
+    ctaRow.append(cta);
+    if (infoOf(sv)) {
+      const info = document.createElement("button");
+      info.type = "button"; info.className = "svc-info"; info.textContent = "i";
+      info.setAttribute("aria-label", "What's included in " + sv.name);
+      info.addEventListener("click", (e) => { e.stopPropagation(); showInfo(sv); });
+      ctaRow.append(info);
+    }
+    body.append(ctaRow);
     b.append(body);
     b.addEventListener("click", () => pickService(sv, b));
     box.append(b);
