@@ -47,7 +47,7 @@ All of the settings that are likely to change live at the top of the `<script>` 
 
 ## Known limitations
 
-- The Wix checkout page only auto-fills the customer's **email**; name and phone must be re-entered there. We haven't found a way around this from the REST API.
+- The Wix checkout page only auto-fills the customer's **email**; name and phone must be re-entered there. I haven't found a way around this from the REST API.
 - A booking that isn't confirmed at checkout stays "Incomplete" in the Wix calendar and does **not** hold the time slot.
 - Each Nester's evening availability window is short relative to a 2-hour service, so one booking can fill most of it.
 - The `nestors-data` collection is publicly readable (by design - see Data source above).
