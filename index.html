@@ -107,6 +107,32 @@ button{font:inherit;cursor:pointer}
 }
 @media (max-width:480px){.two{grid-template-columns:1fr}.row{flex-direction:column}h1{font-size:29px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+
+/* ---- Mobile-first refinements ---- */
+html{-webkit-text-size-adjust:100%}
+button,input,.slot,.card,.svc,.day{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.step{scroll-margin-top:12px}
+.wrap{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right));padding-bottom:calc(48px + env(safe-area-inset-bottom))}
+input[aria-invalid="true"]{border:2px solid var(--err);background:#FFF6F5}
+.days{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin:0 -2px 6px;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.day{flex:0 0 auto;scroll-snap-align:start;width:64px;height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:#fff;border:1.5px solid var(--sage);border-radius:10px;color:var(--ink)}
+.day-dow{font-size:12px;font-weight:500;color:var(--muted)}
+.day-num{font-family:var(--serif);font-weight:600;font-size:23px;line-height:1.1;color:var(--pine)}
+.day-mon{font-size:11px;color:var(--muted)}
+.day[aria-pressed="true"]{background:var(--pine);border-color:var(--pine)}
+.day[aria-pressed="true"] .day-dow,.day[aria-pressed="true"] .day-num,.day[aria-pressed="true"] .day-mon{color:#fff}
+.cont-link{display:flex;align-items:center;justify-content:center;height:50px;margin-top:10px;border-radius:8px;background:var(--pine);color:#fff;font-weight:600;text-decoration:none}
+@media (max-width:480px){
+  input{height:50px}
+  .primary{width:100%;height:52px;font-size:17px}
+  .card{min-height:64px;padding:14px 16px}
+  .slots{grid-template-columns:repeat(3,1fr)}
+  .slot{height:50px;font-size:16px}
+  .svc-cta{padding:10px 0;font-size:14px}
+  .svc-info{width:40px;height:40px;font-size:16px}
+  .svc-cta-row{gap:6px}
+  .modal-box{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+}
 </style>
 </head>
 <body>
@@ -132,7 +158,7 @@ button{font:inherit;cursor:pointer}
           <form id="pinForm" novalidate>
             <label for="pin">Postal or PIN code</label>
             <div class="row">
-              <input id="pin" name="pin" inputmode="numeric" autocomplete="postal-code" maxlength="10" placeholder="e.g. 411014" required>
+              <input id="pin" name="pin" inputmode="numeric" autocomplete="postal-code" maxlength="10" enterkeyhint="go" placeholder="e.g. 07001" required>
               <button class="primary" type="submit" id="pinBtn">Find Nesters</button>
             </div>
           </form>
@@ -155,7 +181,8 @@ button{font:inherit;cursor:pointer}
         <h2>Pick a date and time</h2>
         <div class="panel">
           <p class="summary" id="timeFor"></p>
-          <div class="field"><label for="date">Date</label><input type="date" id="date"></div>
+          <div class="days" id="days" role="group" aria-label="Choose a day"></div>
+          <div class="field"><label for="date">Or pick another date</label><input type="date" id="date"></div>
           <div class="slots" id="slots" role="group" aria-label="Available times"></div>
           <p class="msg" id="slotMsg" role="status" aria-live="polite"></p>
         </div>
@@ -170,19 +197,19 @@ button{font:inherit;cursor:pointer}
           <p class="summary" id="summary"></p>
           <form id="bookForm" novalidate>
             <div class="two">
-              <div class="field"><label for="fn">First name</label><input id="fn" autocomplete="given-name" required></div>
-              <div class="field"><label for="ln">Last name</label><input id="ln" autocomplete="family-name" required></div>
+              <div class="field"><label for="fn">First name</label><input id="fn" autocomplete="given-name" autocapitalize="words" enterkeyhint="next" required></div>
+              <div class="field"><label for="ln">Last name</label><input id="ln" autocomplete="family-name" autocapitalize="words" enterkeyhint="next" required></div>
             </div>
-            <div class="field"><label for="em">Email</label><input id="em" type="email" autocomplete="email" required></div>
+            <div class="field"><label for="em">Email</label><input id="em" type="email" inputmode="email" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required></div>
             <div class="field">
               <label for="ph">Phone</label>
-              <input id="ph" type="tel" autocomplete="tel" placeholder="+91 98765 43210" required>
+              <input id="ph" type="tel" inputmode="tel" autocomplete="tel" enterkeyhint="done" placeholder="+1 732 555 0123" required>
               <p class="hint">Include the country code, for example +91 or +1.</p>
             </div>
+            <p class="msg" id="bookMsg" role="status" aria-live="polite"></p>
             <button class="primary" type="submit" id="bookBtn">Book appointment</button>
             <p class="hint"><strong>One more step:</strong> you'll be taken to a secure page. Click <strong>Confirm</strong> there to finish. Your booking is not complete until you do.</p>
           </form>
-          <p class="msg" id="bookMsg" role="status" aria-live="polite"></p>
         </div>
       </div>
     </li>
@@ -277,7 +304,7 @@ function go(n) {
     li.classList.toggle("done", i + 1 < n);
     li.classList.toggle("current", i + 1 === n);
   });
-  if (n > 1) steps[n - 1].scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "nearest" });
+  if (n > 1) steps[n - 1].scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
 }
 function say(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
 function fail(el, lead, err) {
@@ -497,7 +524,32 @@ function pickNester(n, btn) {
   go(4);
   loadSlots();
 }
-$("#date").addEventListener("change", loadSlots);
+// Scrollable row of the next 14 days: one tap instead of the native date picker.
+function syncDays() {
+  const v = $("#date").value;
+  document.querySelectorAll("#days .day").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.date === v)));
+}
+function renderDays(todayIso) {
+  const box = $("#days"); box.textContent = "";
+  const [y, m, d] = todayIso.split("-").map(Number);
+  for (let i = 0; i < 14; i++) {
+    const dt = new Date(Date.UTC(y, m - 1, d + i));
+    const iso = dt.toISOString().slice(0, 10);
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "day"; b.dataset.date = iso; b.setAttribute("aria-pressed", "false");
+    b.setAttribute("aria-label", dt.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }));
+    const mk = (cls, txt) => { const e = document.createElement("span"); e.className = cls; e.textContent = txt; return e; };
+    b.append(
+      mk("day-dow", i === 0 ? "Today" : dt.toLocaleDateString([], { weekday: "short", timeZone: "UTC" })),
+      mk("day-num", String(dt.getUTCDate())),
+      mk("day-mon", dt.toLocaleDateString([], { month: "short", timeZone: "UTC" }))
+    );
+    b.addEventListener("click", () => { $("#date").value = iso; syncDays(); loadSlots(); });
+    box.append(b);
+  }
+  syncDays();
+}
+$("#date").addEventListener("change", () => { syncDays(); loadSlots(); });
 
 // ---- Step 4: slots -----------------------------------------------------------
 // Open slots for one Nester between two UTC wall-clock strings, earliest first.
@@ -609,21 +661,28 @@ function leave(url, msg) {
   try { window.top.location.href = url; } catch (_) { /* blocked; fallback link below */ }
   setTimeout(() => {
     const a = document.createElement("a");
-    a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Continue to confirmation";
+    a.href = url; a.target = "_blank"; a.rel = "noopener"; a.className = "cont-link"; a.textContent = "Continue to confirmation";
     msg.textContent = ""; msg.className = "msg";
-    msg.append("If nothing happened, ", a, " (opens in a new tab).");
-  }, 2500);
+    msg.append("Almost there. Tap below to finish confirming your booking.", a);
+  }, 1500);
 }
+
+document.querySelectorAll("#bookForm input").forEach((i) => i.addEventListener("input", () => i.removeAttribute("aria-invalid")));
 
 $("#bookForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = $("#bookMsg"), btn = $("#bookBtn"), t = S.slot;
   if (!t) return say(msg, "Pick a time first.", "error");
-  const first = $("#fn").value.trim(), last = $("#ln").value.trim(), email = $("#em").value.trim();
-  const phone = $("#ph").value.replace(/[\s()-]/g, "");
-  if (!first || !last) return say(msg, "Enter your first and last name.", "error");
-  if (!/^\S+@\S+\.\S+$/.test(email)) return say(msg, "Enter a valid email address.", "error");
-  if (!/^\+[1-9]\d{7,14}$/.test(phone)) return say(msg, "Enter your phone with country code, like +919876543210.", "error");
+  const fnEl = $("#fn"), lnEl = $("#ln"), emEl = $("#em"), phEl = $("#ph");
+  [fnEl, lnEl, emEl, phEl].forEach((i) => i.removeAttribute("aria-invalid"));
+  // Mark the bad field, jump to it, and show the reason right above the button.
+  const bad = (el, text) => { el.setAttribute("aria-invalid", "true"); el.focus(); say(msg, text, "error"); };
+  const first = fnEl.value.trim(), last = lnEl.value.trim(), email = emEl.value.trim();
+  const phone = phEl.value.replace(/[\s()-]/g, "");
+  if (!first) return bad(fnEl, "Enter your first name.");
+  if (!last) return bad(lnEl, "Enter your last name.");
+  if (!/^\S+@\S+\.\S+$/.test(email)) return bad(emEl, "Enter a valid email address, like name@example.com.");
+  if (!/^\+[1-9]\d{7,14}$/.test(phone)) return bad(phEl, "Enter your phone with country code, like +17325550123.");
 
   btn.disabled = true; say(msg, "Confirming your time\u2026");
   let redirecting = false, stage = "book";
@@ -732,6 +791,7 @@ if (qs.get("booked") === "1" || qs.get("orderId")) {
 } else {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: CFG.businessTimeZone }); // YYYY-MM-DD, business zone
   $("#date").min = today; $("#date").value = today;
+  renderDays(today);
   go(1);
   (async () => {
     const msg = $("#svcMsg");
