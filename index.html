@@ -48,8 +48,13 @@ button{font:inherit;cursor:pointer}
 .card[aria-pressed="true"]{border-color:var(--pine);background:var(--tint)}
 .card-name{font-family:var(--serif);font-weight:600;font-size:19px;color:var(--pine)}
 .card-role{font-size:14px;color:var(--muted)}
-.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:12px}
-.slot{height:42px;background:#fff;border:1.5px solid var(--sage);border-radius:8px;font-weight:500;color:var(--ink)}
+.slots{margin-top:12px}
+.slot-head{margin:14px 0 8px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.slot-head:first-child{margin-top:4px}
+.slot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (min-width:640px){.slot-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}}
+@media (max-width:349px){.slot-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.slot{height:42px;padding:0 2px;white-space:nowrap;font-variant-numeric:tabular-nums;background:#fff;border:1.5px solid var(--sage);border-radius:8px;font-weight:500;color:var(--ink)}
 .slot:hover{border-color:var(--moss)}
 .slot[aria-pressed="true"]{background:var(--pine);border-color:var(--pine);color:#fff}
 .msg{margin:10px 0 0;font-size:14px;color:var(--muted);min-height:1.2em}
@@ -116,8 +121,9 @@ button,input,.slot,.card,.svc,.day{touch-action:manipulation;-webkit-tap-highlig
 .wrap{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right));padding-bottom:calc(48px + env(safe-area-inset-bottom))}
 input[aria-invalid="true"]{border:2px solid var(--err);background:#FFF6F5}
 .days{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px}
-@media (min-width:640px){.days{grid-template-columns:repeat(7,minmax(0,1fr))}}
-.more-days{width:100%;margin:0 0 6px}
+@media (min-width:640px){.days{grid-template-columns:repeat(8,minmax(0,1fr))}}
+input[type="date"]{min-width:0;max-width:100%;text-align:left}
+.date-field{margin:4px 0 0}
 .day{min-width:0;height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:#fff;border:1.5px solid var(--sage);border-radius:10px;color:var(--ink)}
 .day-dow{font-size:12px;font-weight:500;color:var(--muted)}
 .day-num{font-family:var(--serif);font-weight:600;font-size:23px;line-height:1.1;color:var(--pine)}
@@ -129,13 +135,24 @@ input[aria-invalid="true"]{border:2px solid var(--err);background:#FFF6F5}
   input{height:50px}
   .primary{width:100%;height:52px;font-size:17px}
   .card{min-height:64px;padding:14px 16px}
-  .slots{grid-template-columns:repeat(3,1fr)}
-  .slot{height:50px;font-size:16px}
+  .panel{padding:14px}
+  .slot{height:50px;font-size:15px}
   .svc-cta{padding:10px 0;font-size:14px}
   .svc-info{width:40px;height:40px;font-size:16px}
   .svc-cta-row{gap:6px}
   .modal-box{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
 }
+.alt{margin-top:12px;padding:14px;background:var(--tint);border-radius:10px}
+.alt:empty{display:none}
+.alt-title{margin:0 0 6px;font-family:var(--serif);font-weight:600;font-size:20px;line-height:1.2;color:var(--pine)}
+.alt-text{margin:0;font-size:15px}
+.alt-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:58px;margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:var(--pine);color:#fff;text-align:left}
+.alt-btn:hover{background:var(--moss)}
+.alt-btn small{font-size:13px;opacity:.85}
+.alt-btn strong{font-size:16px;font-weight:600}
+.alt-sub{margin:14px 0 8px;font-size:14px;color:var(--muted)}
+.alt-chips{display:flex;flex-wrap:wrap;gap:8px}
+.alt-chip{height:44px;padding:0 18px;border:1.5px solid var(--pine);border-radius:999px;background:#fff;color:var(--pine);font-weight:600}
 </style>
 </head>
 <body>
@@ -185,10 +202,10 @@ input[aria-invalid="true"]{border:2px solid var(--err);background:#FFF6F5}
         <div class="panel">
           <p class="summary" id="timeFor"></p>
           <div class="days" id="days" role="group" aria-label="Choose a day"></div>
-          <button type="button" class="ghost more-days" id="moreDays">Show more dates</button>
-          <input type="date" id="date" hidden>
+          <div class="field date-field"><label for="date">Need a later date? Pick from calendar</label><input type="date" id="date"></div>
           <div class="slots" id="slots" role="group" aria-label="Available times"></div>
           <p class="msg" id="slotMsg" role="status" aria-live="polite"></p>
+          <div class="alt" id="slotAlt" aria-live="polite"></div>
         </div>
       </div>
     </li>
@@ -477,7 +494,7 @@ function pickService(sv, btn) {
     x.querySelector(".svc-cta").textContent = on ? "Selected" : "Select";
   });
   S.service = sv; S.nester = null; S.slot = null;
-  $("#slots").textContent = ""; say($("#slotMsg"), "");
+  $("#slots").textContent = ""; $("#slotAlt").textContent = ""; say($("#slotMsg"), "");
   if (S.pin) showNesters(); else { say($("#pinMsg"), "Showing Nesters who offer " + sv.name + "."); go(2); }
 }
 
@@ -495,7 +512,7 @@ $("#pinForm").addEventListener("submit", (e) => {
 // Nesters who serve the PIN and offer the chosen service.
 function showNesters() {
   const sv = S.service, pin = S.pin, msg = $("#pinMsg");
-  S.nester = null; S.slot = null; $("#slots").textContent = ""; say($("#slotMsg"), "");
+  S.nester = null; S.slot = null; $("#slots").textContent = ""; $("#slotAlt").textContent = ""; say($("#slotMsg"), "");
   const inArea = roster.filter((n) => n.pins.includes(pin));
   if (!inArea.length) { go(2); return say(msg, "We're actively growing and will be available in your area soon. Please check back with us, or try a nearby postal code."); }
   const list = inArea.filter((n) => (sv.staffMemberIds || []).includes(n.resourceId));
@@ -524,11 +541,11 @@ function pickNester(n, btn) {
   document.querySelectorAll("#nesters .card").forEach((x) => x.setAttribute("aria-pressed", String(x === btn)));
   S.nester = n; S.slot = null;
   $("#timeFor").textContent = S.service.name + " with " + n.name;
-  $("#slots").textContent = ""; say($("#slotMsg"), "");
+  $("#slots").textContent = ""; $("#slotAlt").textContent = ""; say($("#slotMsg"), "");
   go(4);
   loadSlots();
 }
-// Tap-to-pick day buttons (8 shown, up to 28 after "Show more dates"). No sideways scrolling anywhere.
+// Tap-to-pick buttons for today and the next 7 days. Later dates use the calendar field below them.
 function syncDays() {
   const v = $("#date").value;
   document.querySelectorAll("#days .day").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.date === v)));
@@ -536,11 +553,11 @@ function syncDays() {
 function renderDays(todayIso) {
   const box = $("#days"); box.textContent = "";
   const [y, m, d] = todayIso.split("-").map(Number);
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 8; i++) {
     const dt = new Date(Date.UTC(y, m - 1, d + i));
     const iso = dt.toISOString().slice(0, 10);
     const b = document.createElement("button");
-    b.type = "button"; b.className = "day"; b.dataset.date = iso; b.hidden = i >= 8; b.setAttribute("aria-pressed", "false");
+    b.type = "button"; b.className = "day"; b.dataset.date = iso; b.setAttribute("aria-pressed", "false");
     b.setAttribute("aria-label", dt.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }));
     const mk = (cls, txt) => { const e = document.createElement("span"); e.className = cls; e.textContent = txt; return e; };
     b.append(
@@ -554,69 +571,135 @@ function renderDays(todayIso) {
   syncDays();
 }
 $("#date").addEventListener("change", () => { syncDays(); loadSlots(); });
-$("#moreDays").addEventListener("click", () => {
-  document.querySelectorAll("#days .day").forEach((b) => { b.hidden = false; });
-  $("#moreDays").hidden = true;
-});
 
 // ---- Step 4: slots -----------------------------------------------------------
-// Open slots for one Nester between two UTC wall-clock strings, earliest first.
-async function fetchSlots(n, from, to) {
-  const r = await wix("/_api/service-availability/v2/time-slots", {
-    serviceId: S.service.id, fromLocalDate: from, toLocalDate: to, timeZone: "UTC", bookable: true,
-    includeResourceTypeIds: [CFG.staffTypeId], resourceIds: [n.resourceId], cursorPaging: { limit: 100 }
-  });
-  return (r.timeSlots || []).filter((t) => t.bookable !== false)
-    .sort((a, b) => a.localStartDate.localeCompare(b.localStartDate));
+// Slots for one Nester between two UTC wall-clock strings, earliest first.
+// all=false: only slots that can be booked now. all=true: also slots Wix won't let anyone book yet,
+// each carrying the reason in bookingPolicyViolations.
+async function fetchSlots(n, from, to, all) {
+  const body = {
+    serviceId: S.service.id, fromLocalDate: from, toLocalDate: to, timeZone: "UTC",
+    includeResourceTypeIds: [CFG.staffTypeId], resourceIds: [n.resourceId], cursorPaging: { limit: all ? 300 : 100 }
+  };
+  if (!all) body.bookable = true;
+  const r = await wix("/_api/service-availability/v2/time-slots", body);
+  const list = (r.timeSlots || []).slice().sort((a, b) => a.localStartDate.localeCompare(b.localStartDate));
+  return all ? list : list.filter((t) => t.bookable !== false);
+}
+// Wix calls "booked further ahead than the service allows" tooEarlyToBook. The limit is set per service in the Wix dashboard.
+const tooFar = (t) => !!(t.bookingPolicyViolations && t.bookingPolicyViolations.tooEarlyToBook);
+
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+const bizHour = (local) => +new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: CFG.businessTimeZone }).format(asDate(local));
+const ymdOf = (local) => asDate(local).toLocaleDateString("en-CA", { timeZone: CFG.businessTimeZone });
+const fmtShort = (local) => asDate(local).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: CFG.businessTimeZone });
+const fmtLong = (dt) => dt.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", timeZone: CFG.businessTimeZone });
+function jumpToDate(iso) { $("#date").value = iso; syncDays(); loadSlots(); }
+
+// If the day is empty only because it is beyond the service's booking window, read the limit from Wix's own answer.
+function windowInfo(list) {
+  const t = list.find(tooFar);
+  if (!t) return null;
+  const v = t.bookingPolicyViolations;
+  const opens = v.earliestBookingDate ? new Date(v.earliestBookingDate) : null;
+  const days = opens && !isNaN(opens) ? Math.round((asDate(t.localStartDate) - opens) / 864e5) : 0;
+  return { slot: t, opens: opens && !isNaN(opens) ? opens : null, days };
+}
+function renderWindow(w) {
+  const alt = $("#slotAlt"); alt.textContent = "";
+  alt.append(el("p", "alt-title", "Not open for booking yet."));
+  const span = w.days >= 7 && w.days % 7 === 0 ? (w.days / 7) + (w.days === 7 ? " week" : " weeks") : (w.days >= 1 ? w.days + (w.days === 1 ? " day" : " days") : "");
+  let text = span ? "We take bookings up to " + span + " ahead. " : "This date is further ahead than we can take bookings for right now. ";
+  if (w.opens) text += "Bookings for " + fmtDay(w.slot.localStartDate) + " open on " + fmtLong(w.opens) + ". ";
+  text += "Please come back then, or pick an earlier date.";
+  alt.append(el("p", "alt-text", text));
 }
 
-// First open slot for a Nester after the chosen day. Scans in 14-day chunks, up to 8 weeks ahead.
+// First open slot for a Nester after the chosen day. Scans in 14-day chunks, up to 8 weeks ahead,
+// and stops early once it reaches the service's booking window.
 async function nextAvailable(n, y, m, d) {
   for (let i = 0; i < 4; i++) {
     const from = bizToUtc(y, m, d + 1 + i * 14, 0, 0, 0);
     const to = bizToUtc(y, m, d + 14 + i * 14, 23, 59, 59);
     try {
-      const found = await fetchSlots(n, from, to);
-      if (found.length) return found[0]; // fetchSlots already sorts, so [0] is the earliest
+      const found = await fetchSlots(n, from, to, true);
+      const open = found.filter((t) => t.bookable !== false);
+      if (open.length) return open[0];
+      if (found.some(tooFar)) return null;
     } catch (_) { return null; }
   }
   return null;
 }
 
-// Nothing open for the chosen Nester that day: say who else is free, and when this Nester is next available.
+// Nothing open for the chosen Nester that day.
 async function noOpenings(from, to, msg, req, y, m, d) {
-  const base = "No openings for " + S.nester.name + " on this day. ";
-  const others = S.nesterList.filter((n) => n.resourceId !== S.nester.resourceId);
-  say(msg, base + "Checking other dates and Nesters\u2026");
+  say(msg, "Checking other dates\u2026");
+  let win = null;
+  try { win = windowInfo(await fetchSlots(S.nester, from, to, true)); } catch (_) { /* fall through to the normal message */ }
+  if (req !== slotReq) return;
+  if (win) { say(msg, ""); return renderWindow(win); }
 
+  const others = S.nesterList.filter((n) => n.resourceId !== S.nester.resourceId);
   const free = [];
   const [next] = await Promise.all([
     nextAvailable(S.nester, y, m, d),
     Promise.all(others.map(async (n) => {
-      try { if ((await fetchSlots(n, from, to)).length) free.push(n.name); } catch (_) { /* skip this one */ }
+      try { if ((await fetchSlots(n, from, to)).length) free.push(n); } catch (_) { /* skip this one */ }
     }))
   ]);
   if (req !== slotReq) return; // user already changed date or Nester
+  say(msg, "");
 
-  let text = base;
-  if (free.length) text += "Available that day: " + free.join(", ") + ". ";
-  else if (others.length) text += "The other Nesters are booked that day too. ";
-  else text += S.nester.name + " is currently the only Nester offering " + S.service.name + " in " + S.pin + ". ";
-
+  const alt = $("#slotAlt"); alt.textContent = "";
+  alt.append(el("p", "alt-title", S.nester.name + " isn't free on this day."));
   if (next) {
-    text += S.nester.name + " is next available on " + fmtDay(next.localStartDate) + " at " + fmtTime(next.localStartDate) + ". ";
+    const b = el("button", "alt-btn"); b.type = "button";
+    b.append(el("small", "", "Next opening"), el("strong", "", fmtShort(next.localStartDate) + " \u00b7 " + fmtTime(next.localStartDate)));
+    b.addEventListener("click", () => jumpToDate(ymdOf(next.localStartDate)));
+    alt.append(b);
   } else {
-    text += S.nester.name + " has no openings in the next 8 weeks. ";
+    alt.append(el("p", "alt-text", "No other openings are available to book right now."));
   }
-  text += free.length ? "Select another Nester above, or pick a different date." : "Try another date.";
-  say(msg, text.trim());
+  if (free.length) {
+    alt.append(el("p", "alt-sub", "Free this day:"));
+    const row = el("div", "alt-chips");
+    free.forEach((n) => {
+      const c = el("button", "alt-chip", n.name); c.type = "button";
+      c.addEventListener("click", () => {
+        const cards = [...document.querySelectorAll("#nesters .card")];
+        const card = cards[S.nesterList.indexOf(n)];
+        if (card) pickNester(n, card);
+      });
+      row.append(c);
+    });
+    alt.append(row);
+  }
+}
+
+// Times grouped as Morning / Afternoon / Evening (headings only when more than one group has times).
+function renderSlots(list) {
+  const box = $("#slots"); box.textContent = "";
+  const groups = [["Morning", []], ["Afternoon", []], ["Evening", []]];
+  list.forEach((t) => { const h = bizHour(t.localStartDate); groups[h < 12 ? 0 : h < 17 ? 1 : 2][1].push(t); });
+  const used = groups.filter((g) => g[1].length);
+  used.forEach(([label, items]) => {
+    if (used.length > 1) box.append(el("p", "slot-head", label));
+    const row = el("div", "slot-grid");
+    items.forEach((t) => {
+      const b = el("button", "slot", fmtTime(t.localStartDate));
+      b.type = "button"; b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => pickSlot(t, b));
+      row.append(b);
+    });
+    box.append(row);
+  });
 }
 
 async function loadSlots() {
   S.slot = null;
   if (!steps[4].hidden) go(4);
-  const grid = $("#slots"), msg = $("#slotMsg"), date = $("#date").value;
-  grid.textContent = "";
+  const msg = $("#slotMsg"), date = $("#date").value;
+  $("#slots").textContent = ""; $("#slotAlt").textContent = "";
   if (!S.service || !S.nester || !date) return;
   const req = ++slotReq;
   const [y, m, d] = date.split("-").map(Number);
@@ -628,13 +711,7 @@ async function loadSlots() {
     if (req !== slotReq) return;
     if (!slots.length) return noOpenings(from, to, msg, req, y, m, d);
     say(msg, "Times are shown in " + TZ + ".");
-    slots.forEach((t) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "slot"; b.setAttribute("aria-pressed", "false");
-      b.textContent = fmtTime(t.localStartDate);
-      b.addEventListener("click", () => pickSlot(t, b));
-      grid.append(b);
-    });
+    renderSlots(slots);
   } catch (err) { if (req === slotReq) fail(msg, "Couldn't load times. Please try again.", err); }
 }
 
