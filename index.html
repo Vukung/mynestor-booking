@@ -267,8 +267,8 @@ const CFG = {
 const $ = (s) => document.querySelector(s);
 const steps = [...document.querySelectorAll(".step")];
 const TZ = CFG.tzLabel;
-const S = { pin: null, nester: null, service: null, slot: null, nesterCount: 0 };
-let token = null, roster = null, services = null, catalog = [], slots = [];
+const S = { pin: null, nester: null, service: null, slot: null, nesterCount: 0, nesterList: [] };
+let token = null, roster = null, services = null, catalog = [], slots = [], slotReq = 0;
 
 const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function go(n) {
@@ -470,6 +470,7 @@ function showNesters() {
   const list = inArea.filter((n) => (sv.staffMemberIds || []).includes(n.resourceId));
   if (!list.length) { go(2); return say(msg, "No Nesters in " + pin + " offer " + sv.name + " right now. Try another service or code.", "error"); }
   S.nesterCount = list.length;
+  S.nesterList = list;
   say(msg, list.length + (list.length === 1 ? " Nester offers " : " Nesters offer ") + sv.name + " in " + pin + ".");
   renderNesters(list); go(3);
 }
@@ -499,24 +500,73 @@ function pickNester(n, btn) {
 $("#date").addEventListener("change", loadSlots);
 
 // ---- Step 4: slots -----------------------------------------------------------
+// Open slots for one Nester between two UTC wall-clock strings, earliest first.
+async function fetchSlots(n, from, to) {
+  const r = await wix("/_api/service-availability/v2/time-slots", {
+    serviceId: S.service.id, fromLocalDate: from, toLocalDate: to, timeZone: "UTC", bookable: true,
+    includeResourceTypeIds: [CFG.staffTypeId], resourceIds: [n.resourceId], cursorPaging: { limit: 100 }
+  });
+  return (r.timeSlots || []).filter((t) => t.bookable !== false)
+    .sort((a, b) => a.localStartDate.localeCompare(b.localStartDate));
+}
+
+// First open slot for a Nester after the chosen day. Scans in 14-day chunks, up to 8 weeks ahead.
+async function nextAvailable(n, y, m, d) {
+  for (let i = 0; i < 4; i++) {
+    const from = bizToUtc(y, m, d + 1 + i * 14, 0, 0, 0);
+    const to = bizToUtc(y, m, d + 14 + i * 14, 23, 59, 59);
+    try {
+      const found = await fetchSlots(n, from, to);
+      if (found.length) return found[0]; // fetchSlots already sorts, so [0] is the earliest
+    } catch (_) { return null; }
+  }
+  return null;
+}
+
+// Nothing open for the chosen Nester that day: say who else is free, and when this Nester is next available.
+async function noOpenings(from, to, msg, req, y, m, d) {
+  const base = "No openings for " + S.nester.name + " on this day. ";
+  const others = S.nesterList.filter((n) => n.resourceId !== S.nester.resourceId);
+  say(msg, base + "Checking other dates and Nesters\u2026");
+
+  const free = [];
+  const [next] = await Promise.all([
+    nextAvailable(S.nester, y, m, d),
+    Promise.all(others.map(async (n) => {
+      try { if ((await fetchSlots(n, from, to)).length) free.push(n.name); } catch (_) { /* skip this one */ }
+    }))
+  ]);
+  if (req !== slotReq) return; // user already changed date or Nester
+
+  let text = base;
+  if (free.length) text += "Available that day: " + free.join(", ") + ". ";
+  else if (others.length) text += "The other Nesters are booked that day too. ";
+  else text += S.nester.name + " is currently the only Nester offering " + S.service.name + " in " + S.pin + ". ";
+
+  if (next) {
+    text += S.nester.name + " is next available on " + fmtDay(next.localStartDate) + " at " + fmtTime(next.localStartDate) + ". ";
+  } else {
+    text += S.nester.name + " has no openings in the next 8 weeks. ";
+  }
+  text += free.length ? "Select another Nester above, or pick a different date." : "Try another date.";
+  say(msg, text.trim());
+}
+
 async function loadSlots() {
   S.slot = null;
   if (!steps[4].hidden) go(4);
   const grid = $("#slots"), msg = $("#slotMsg"), date = $("#date").value;
   grid.textContent = "";
   if (!S.service || !S.nester || !date) return;
+  const req = ++slotReq;
   const [y, m, d] = date.split("-").map(Number);
   const from = bizToUtc(y, m, d, 0, 0, 0);   // the chosen day in the business time zone
   const to = bizToUtc(y, m, d, 23, 59, 59);
-  say(msg, "Checking availability…");
+  say(msg, "Checking availability\u2026");
   try {
-    const r = await wix("/_api/service-availability/v2/time-slots", {
-      serviceId: S.service.id, fromLocalDate: from, toLocalDate: to, timeZone: "UTC", bookable: true,
-      includeResourceTypeIds: [CFG.staffTypeId], resourceIds: [S.nester.resourceId], cursorPaging: { limit: 100 }
-    });
-    slots = (r.timeSlots || []).filter((t) => t.bookable !== false)
-      .sort((a, b) => a.localStartDate.localeCompare(b.localStartDate));
-    if (!slots.length) return say(msg, "No openings on this day. Try another date" + (S.nesterCount > 1 ? ", or choose another Nester above." : "."));
+    slots = await fetchSlots(S.nester, from, to);
+    if (req !== slotReq) return;
+    if (!slots.length) return noOpenings(from, to, msg, req, y, m, d);
     say(msg, "Times are shown in " + TZ + ".");
     slots.forEach((t) => {
       const b = document.createElement("button");
@@ -525,7 +575,7 @@ async function loadSlots() {
       b.addEventListener("click", () => pickSlot(t, b));
       grid.append(b);
     });
-  } catch (err) { fail(msg, "Couldn't load times. Please try again.", err); }
+  } catch (err) { if (req === slotReq) fail(msg, "Couldn't load times. Please try again.", err); }
 }
 
 function pickSlot(t, btn) {
@@ -575,7 +625,7 @@ $("#bookForm").addEventListener("submit", async (e) => {
   if (!/^\S+@\S+\.\S+$/.test(email)) return say(msg, "Enter a valid email address.", "error");
   if (!/^\+[1-9]\d{7,14}$/.test(phone)) return say(msg, "Enter your phone with country code, like +919876543210.", "error");
 
-  btn.disabled = true; say(msg, "Confirming your time…");
+  btn.disabled = true; say(msg, "Confirming your time\u2026");
   let redirecting = false, stage = "book";
   try {
     const rid = S.nester.resourceId;
@@ -591,7 +641,7 @@ $("#bookForm").addEventListener("submit", async (e) => {
       return loadSlots();
     }
 
-    say(msg, "Reserving your time…");
+    say(msg, "Reserving your time\u2026");
     const res = await wix("/bookings/v2/bookings", {
       booking: {
         bookedEntity: { slot: {
@@ -614,7 +664,7 @@ $("#bookForm").addEventListener("submit", async (e) => {
 
     // Confirmation step: Wix confirms the booking when its checkout completes (even for a $0 order).
     stage = "checkout";
-    say(msg, "Preparing confirmation…");
+    say(msg, "Preparing confirmation\u2026");
     const coBody = {
       lineItems: [{ catalogReference: { appId: CFG.bookingsAppId, catalogItemId: bookingId }, quantity: 1 }],
       channelType: "WEB"
@@ -645,7 +695,7 @@ $("#bookForm").addEventListener("submit", async (e) => {
       }));
     } catch (_) { /* storage may be unavailable; confirmation page still works */ }
     redirecting = true;
-    say(msg, "Taking you to the confirmation page…");
+    say(msg, "Taking you to the confirmation page\u2026");
     leave(url, msg);
   } catch (err) {
     if (stage === "checkout") {
@@ -685,7 +735,7 @@ if (qs.get("booked") === "1" || qs.get("orderId")) {
   go(1);
   (async () => {
     const msg = $("#svcMsg");
-    say(msg, "Loading services…");
+    say(msg, "Loading services\u2026");
     try {
       const [r, sv] = await Promise.all([loadRoster(), loadServices()]);
       const ids = new Set(r.map((n) => n.resourceId));
